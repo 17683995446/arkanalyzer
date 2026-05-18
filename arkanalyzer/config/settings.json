@@ -1,0 +1,40 @@
+{
+    "llm": {
+        "api_key": "sk-uqelhavcdhfxjzjesdenxpbtqombamjniazzjtbssmdcwdvg",
+        "base_url": "https://api.siliconflow.cn/v1",
+        "model": "Qwen/Qwen2.5-7B-Instruct",
+        "temperature": 0.7,
+        "max_tokens": 2048,
+        "timeout": 60,
+        "retry_times": 3
+    },
+    "database": {
+        "db_path": "data/arkanalyzer.db",
+        "pool_size": 10,
+        "pool_recycle": 3600,
+        "echo": false
+    },
+    "api": {
+        "host": "0.0.0.0",
+        "port": 5000,
+        "debug": true,
+        "cors_enabled": true,
+        "rate_limit": "100/minute"
+    },
+    "visualization": {
+        "graph_layout": "force-directed",
+        "node_size_range": [20, 60],
+        "edge_width_range": [1, 5],
+        "animation_duration": 300,
+        "max_nodes_display": 500
+    },
+    "system": {
+        "log_level": "INFO",
+        "log_path": "logs/arkanalyzer.log",
+        "cache_enabled": true,
+        "cache_ttl": 3600,
+        "backup_enabled": true,
+        "backup_interval": 86400,
+        "environment": "development"
+    }
+}

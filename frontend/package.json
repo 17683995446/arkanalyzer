@@ -1,0 +1,34 @@
+{
+  "name": "arkanalyzer-frontend",
+  "version": "1.0.0",
+  "description": "Arkanalyzer Knowledge Graph Visualization Frontend",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "axios": "^1.6.2",
+    "d3": "^7.8.5",
+    "cytoscape": "^3.28.0",
+    "mermaid": "^10.6.1",
+    "recharts": "^2.10.3"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.43",
+    "@types/react-dom": "^18.2.17",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8",
+    "vitest": "^1.1.0",
+    "@testing-library/react": "^14.1.2",
+    "jsdom": "^23.0.1"
+  }
+}

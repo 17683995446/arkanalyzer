@@ -1,0 +1,913 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arkanalyzer - 知识图谱分析系统</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #00d4ff;
+            --secondary-color: #0088cc;
+            --background-dark: #0a1628;
+            --background-light: #1a365d;
+            --text-light: #e2e8f0;
+            --text-muted: #94a3b8;
+            --danger-color: #ff6b6b;
+            --success-color: #4ade80;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--background-dark) 0%, var(--background-light) 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+        }
+
+        .container {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 260px;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 30px;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+            padding: 10px;
+        }
+
+        .nav-menu {
+            list-style: none;
+            flex-grow: 1;
+        }
+
+        .nav-item {
+            margin-bottom: 5px;
+        }
+
+        .nav-link {
+            display: block;
+            padding: 14px 20px;
+            color: var(--text-muted);
+            text-decoration: none;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .nav-link:hover {
+            background: rgba(0, 212, 255, 0.1);
+            color: var(--primary-color);
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2) 0%, rgba(0, 180, 216, 0.1) 100%);
+            color: var(--primary-color);
+            border-left: 3px solid var(--primary-color);
+        }
+
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+
+        .page-header {
+            margin-bottom: 30px;
+        }
+
+        .page-title {
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, var(--primary-color), #ffffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-description {
+            color: var(--text-muted);
+            font-size: 16px;
+        }
+
+        /* Cards */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(0, 212, 255, 0.3);
+        }
+
+        .stat-value {
+            font-size: 42px;
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            color: var(--text-muted);
+            font-size: 14px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+
+        /* Visualization Container */
+        .visualization-container {
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .graph-container {
+            width: 100%;
+            height: 500px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 15px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 212, 255, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-light);
+            font-weight: 500;
+        }
+
+        .form-input, .form-textarea {
+            width: 100%;
+            padding: 12px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            color: var(--text-light);
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus, .form-textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.1);
+        }
+
+        .form-textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        /* Pages */
+        .page {
+            display: none;
+        }
+
+        .page.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* List styles */
+        .graph-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .graph-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .graph-item:hover {
+            border-color: var(--primary-color);
+            background: rgba(0, 212, 255, 0.05);
+        }
+
+        .graph-item-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .graph-item-meta {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+
+        /* Entity details */
+        .node-details {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(15, 23, 42, 0.95);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            max-height: 400px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .node-details.active {
+            display: block;
+        }
+
+        .detail-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin-bottom: 16px;
+        }
+
+        .detail-item {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .detail-label {
+            color: var(--text-muted);
+            font-size: 12px;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .stat-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .stat-text {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 80px;
+                padding: 10px;
+            }
+
+            .logo {
+                font-size: 16px;
+            }
+
+            .nav-link {
+                padding: 10px;
+                font-size: 12px;
+                text-align: center;
+            }
+
+            .main-content {
+                padding: 15px;
+            }
+
+            .page-title {
+                font-size: 24px;
+            }
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid rgba(0, 212, 255, 0.1);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="logo">🔬 Arkanalyzer</div>
+            <nav>
+                <ul class="nav-menu">
+                    <li class="nav-item">
+                        <a class="nav-link active" onclick="showPage('dashboard')">📊 仪表盘</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" onclick="showPage('graphs')">📁 图谱管理</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" onclick="showPage('knowledge')">🕸️ 知识图谱</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" onclick="showPage('architecture')">🏗️ 架构图</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" onclick="showPage('extraction')">⚡ 知识抽取</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" onclick="showPage('help')">❓ 帮助</a>
+                    </li>
+                </ul>
+            </nav>
+        </aside>
+
+        <main class="main-content">
+            <!-- Dashboard Page -->
+            <div id="dashboard" class="page active">
+                <div class="page-header">
+                    <h1 class="page-title">系统概览</h1>
+                    <p class="page-description">Arkanalyzer 知识图谱分析系统 - 实时监控与管理</p>
+                </div>
+
+                <div class="card-grid">
+                    <div class="card">
+                        <div class="stat-value" id="stat-graphs">3</div>
+                        <div class="stat-label">知识图谱</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-value" id="stat-entities">142</div>
+                        <div class="stat-label">实体总数</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-value" id="stat-relations">238</div>
+                        <div class="stat-label">关系总数</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-value" id="stat-tasks">8</div>
+                        <div class="stat-label">分析任务</div>
+                    </div>
+                </div>
+
+                <div class="visualization-container">
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px;">🏗️ 系统架构</h3>
+                    <div class="mermaid">
+graph TD
+    A[📱 前端界面] --> B[🔌 REST API]
+    B --> C[⚙️ 知识抽取器]
+    B --> D[💾 知识仓库]
+    B --> E[📊 图谱分析器]
+    C --> F[🤖 LLM服务]
+    D --> G[(SQLite)]
+    E --> D
+                    </div>
+                </div>
+
+                <div class="visualization-container">
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px;">⚡ 快速开始</h3>
+                    <p style="margin-bottom: 15px; color: var(--text-muted);">探索知识图谱的强大功能:</p>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap;">
+                        <button class="btn" onclick="showPage('extraction')">✨ 创建图谱</button>
+                        <button class="btn btn-secondary" onclick="showPage('knowledge')">🕸️ 查看图谱</button>
+                        <button class="btn btn-secondary" onclick="loadDemoData()">📦 加载示例</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Graphs Page -->
+            <div id="graphs" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">图谱管理</h1>
+                    <p class="page-description">管理和查看您的知识图谱</p>
+                </div>
+
+                <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+                    <button class="btn" onclick="createNewGraph()">＋ 新建图谱</button>
+                    <button class="btn btn-secondary" onclick="refreshGraphList()">🔄 刷新</button>
+                </div>
+
+                <div class="visualization-container">
+                    <div class="graph-list" id="graph-list">
+                        <!-- Graph items will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Knowledge Graph Page -->
+            <div id="knowledge" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">知识图谱</h1>
+                    <p class="page-description">交互式知识图谱可视化</p>
+                </div>
+
+                <div class="visualization-container">
+                    <div class="graph-container">
+                        <div id="graph-visualization">
+                            <svg width="100%" height="100%" id="graph-svg"></svg>
+                        </div>
+                        <div class="node-details" id="node-details">
+                            <div class="detail-title" id="detail-title">节点详情</div>
+                            <div id="detail-content"></div>
+                            <button class="btn" style="width: 100%; margin-top: 15px;" onclick="closeNodeDetails()">关闭</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Architecture Page -->
+            <div id="architecture" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">系统架构</h1>
+                    <p class="page-description">Arkanalyzer 系统架构与模块关系</p>
+                </div>
+
+                <div class="visualization-container">
+                    <div class="mermaid">
+graph TB
+    subgraph Frontend["📱 前端展示层"]
+        A[仪表盘]
+        B[知识图谱可视化]
+        C[架构图展示]
+    end
+
+    subgraph API["🔌 API网关层"]
+        D[Flask REST API]
+        E[认证与授权]
+    end
+
+    subgraph Core["⚙️ 核心业务层"]
+        F[知识抽取器]
+        G[知识仓库]
+        H[图谱分析器]
+        I[LLM连接器]
+    end
+
+    subgraph Data["💾 数据存储层"]
+        J[(SQLite数据库)]
+        K[(缓存系统)]
+    end
+
+    A --> D
+    B --> D
+    C --> D
+    D --> F
+    D --> G
+    D --> H
+    F --> I
+    I --> J
+    G --> J
+    H --> G
+                    </div>
+                </div>
+
+                <div class="visualization-container">
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px;">📦 核心模块</h3>
+                    <div class="architecture-diagram">
+                        <div class="arch-layer">
+                            <div class="arch-layer-title">知识抽取</div>
+                            <div class="arch-components">
+                                <div class="arch-component">文本解析</div>
+                                <div class="arch-component">实体识别</div>
+                                <div class="arch-component">关系提取</div>
+                            </div>
+                        </div>
+                        <div class="arch-layer">
+                            <div class="arch-layer-title">知识存储</div>
+                            <div class="arch-components">
+                                <div class="arch-component">图数据库</div>
+                                <div class="arch-component">索引系统</div>
+                                <div class="arch-component">版本控制</div>
+                            </div>
+                        </div>
+                        <div class="arch-layer">
+                            <div class="arch-layer-title">知识分析</div>
+                            <div class="arch-components">
+                                <div class="arch-component">路径分析</div>
+                                <div class="arch-component">社区检测</div>
+                                <div class="arch-component">重要性计算</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Extraction Page -->
+            <div id="extraction" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">知识抽取</h1>
+                    <p class="page-description">从文本自动抽取知识构建图谱</p>
+                </div>
+
+                <div class="visualization-container">
+                    <div class="form-group">
+                        <label class="form-label">图谱名称</label>
+                        <input type="text" class="form-input" id="graph-name" placeholder="输入图谱名称" value="新的知识图谱">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文本内容</label>
+                        <textarea class="form-textarea" id="extraction-text" placeholder="输入或粘贴要抽取知识的文本...">人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。机器学习是人工智能的一个子领域，使计算机能够从数据中学习和改进。深度学习是机器学习的一个分支，基于神经网络。OpenAI是一家著名的AI研究公司，开发了GPT系列模型。</textarea>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn" onclick="performExtraction()">✨ 开始抽取</button>
+                        <button class="btn btn-secondary" onclick="loadDemoText()">📄 加载示例</button>
+                    </div>
+                </div>
+
+                <div class="visualization-container" id="extraction-results" style="display: none;">
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px;">📊 抽取结果</h3>
+                    <div id="result-content"></div>
+                </div>
+            </div>
+
+            <!-- Help Page -->
+            <div id="help" class="page">
+                <div class="page-header">
+                    <h1 class="page-title">帮助文档</h1>
+                    <p class="page-description">Arkanalyzer 使用指南</p>
+                </div>
+
+                <div class="visualization-container">
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px;">🚀 快速入门</h3>
+                    <p style="color: var(--text-muted); margin-bottom: 15px; line-height: 1.7;">Arkanalyzer 是一个智能知识图谱分析系统，帮助您从文本中提取知识，构建图谱，并进行分析。</p>
+
+                    <h3 style="color: var(--primary-color); margin-bottom: 20px; margin-top: 30px;">📋 功能说明</h3>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-text">📊 仪表盘</div>
+                            <div style="margin-top: 10px; font-size: 13px; color: var(--text-muted);">系统概览与快速操作</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-text">📁 图谱管理</div>
+                            <div style="margin-top: 10px; font-size: 13px; color: var(--text-muted);">查看和管理知识图谱</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-text">🕸️ 知识图谱</div>
+                            <div style="margin-top: 10px; font-size: 13px; color: var(--text-muted);">交互式可视化展示</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-text">⚡ 知识抽取</div>
+                            <div style="margin-top: 10px; font-size: 13px; color: var(--text-muted);">从文本自动构建图谱</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            themeVariables: {
+                primaryColor: '#00d4ff',
+                primaryTextColor: '#ffffff',
+                primaryBorderColor: '#00d4ff',
+                lineColor: '#94a3b8',
+                secondaryColor: '#1a365d'
+            }
+        });
+
+        let currentGraphData = null;
+
+        function showPage(pageName) {
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            document.querySelectorAll('.nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+
+            document.getElementById(pageName).classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(link => {
+                if (link.textContent.includes(pageName === 'dashboard' ? '仪表盘' :
+                    pageName === 'graphs' ? '图谱' :
+                    pageName === 'knowledge' ? '知识' :
+                    pageName === 'architecture' ? '架构' :
+                    pageName === 'extraction' ? '抽取' : '帮助')) {
+                    link.classList.add('active');
+                }
+            });
+
+            if (pageName === 'knowledge') {
+                renderKnowledgeGraph();
+            } else if (pageName === 'graphs') {
+                refreshGraphList();
+            }
+        }
+
+        function renderKnowledgeGraph() {
+            const svg = document.getElementById('graph-svg');
+            const container = svg.parentElement;
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            svg.innerHTML = '';
+
+            const nodes = [
+                { id: '1', name: '人工智能', type: '概念', x: width / 2, y: height / 4 },
+                { id: '2', name: '机器学习', type: '概念', x: width / 4, y: height / 2 },
+                { id: '3', name: '深度学习', type: '概念', x: width * 3 / 4, y: height / 2 },
+                { id: '4', name: '神经网络', type: '概念', x: width / 3, y: height * 3 / 4 },
+                { id: '5', name: 'OpenAI', type: '组织', x: width * 2 / 3, y: height * 3 / 4 },
+            ];
+
+            const links = [
+                { source: '1', target: '2', label: '包含' },
+                { source: '1', target: '3', label: '包含' },
+                { source: '2', target: '4', label: '使用' },
+                { source: '3', target: '4', label: '基于' },
+                { source: '5', target: '1', label: '研究' },
+            ];
+
+            const typeColors = {
+                '人物': '#ff6b6b',
+                '地点': '#4ecdc4',
+                '组织': '#45b7d1',
+                '概念': '#ffeaa7',
+                '事件': '#96ceb4'
+            };
+
+            // Draw links
+            links.forEach(link => {
+                const source = nodes.find(n => n.id === link.source);
+                const target = nodes.find(n => n.id === link.target);
+
+                if (source && target) {
+                    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    line.setAttribute('x1', source.x);
+                    line.setAttribute('y1', source.y);
+                    line.setAttribute('x2', target.x);
+                    line.setAttribute('y2', target.y);
+                    line.setAttribute('stroke', '#64748b');
+                    line.setAttribute('stroke-width', '2');
+                    svg.appendChild(line);
+
+                    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                    text.setAttribute('x', (source.x + target.x) / 2);
+                    text.setAttribute('y', (source.y + target.y) / 2);
+                    text.setAttribute('text-anchor', 'middle');
+                    text.setAttribute('fill', '#94a3b8');
+                    text.setAttribute('font-size', '12');
+                    text.textContent = link.label;
+                    svg.appendChild(text);
+                }
+            });
+
+            // Draw nodes
+            nodes.forEach(node => {
+                const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                group.style.cursor = 'pointer';
+                group.onclick = () => showNodeDetails(node);
+
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', node.x);
+                circle.setAttribute('cy', node.y);
+                circle.setAttribute('r', '30');
+                circle.setAttribute('fill', typeColors[node.type] || '#00d4ff');
+                circle.setAttribute('stroke', 'white');
+                circle.setAttribute('stroke-width', '2');
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.setAttribute('x', node.x);
+                text.setAttribute('y', node.y + 50);
+                text.setAttribute('text-anchor', 'middle');
+                text.setAttribute('fill', 'white');
+                text.setAttribute('font-size', '14');
+                text.textContent = node.name;
+
+                group.appendChild(circle);
+                group.appendChild(text);
+                svg.appendChild(group);
+            });
+        }
+
+        function showNodeDetails(node) {
+            const panel = document.getElementById('node-details');
+            const title = document.getElementById('detail-title');
+            const content = document.getElementById('detail-content');
+
+            title.textContent = node.name;
+
+            const typeColors = {
+                '人物': '人物',
+                '地点': '地点',
+                '组织': '组织',
+                '概念': '概念'
+            };
+
+            content.innerHTML = `
+                <div class="detail-item">
+                    <div class="detail-label">类型</div>
+                    <div class="detail-value">${node.type}</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">描述</div>
+                    <div class="detail-value">这是一个${node.type}实体，是知识图谱的重要组成部分。</div>
+                </div>
+                <div class="detail-item">
+                    <div class="detail-label">ID</div>
+                    <div class="detail-value">${node.id}</div>
+                </div>
+            `;
+
+            panel.classList.add('active');
+        }
+
+        function closeNodeDetails() {
+            document.getElementById('node-details').classList.remove('active');
+        }
+
+        function refreshGraphList() {
+            const list = document.getElementById('graph-list');
+            list.innerHTML = `
+                <div class="graph-item" onclick="showPage('knowledge')">
+                    <div class="graph-item-title">人工智能知识图谱</div>
+                    <div class="graph-item-meta">14个实体 · 18个关系 · v1</div>
+                </div>
+                <div class="graph-item" onclick="showPage('knowledge')">
+                    <div class="graph-item-title">技术栈图谱</div>
+                    <div class="graph-item-meta">8个实体 · 12个关系 · v1</div>
+                </div>
+                <div class="graph-item" onclick="showPage('knowledge')">
+                    <div class="graph-item-title">研究领域图谱</div>
+                    <div class="graph-item-meta">10个实体 · 14个关系 · v2</div>
+                </div>
+            `;
+        }
+
+        function createNewGraph() {
+            const name = prompt('请输入新图谱的名称:');
+            if (name) {
+                alert('新图谱创建成功！现在可以开始添加内容了。');
+                refreshGraphList();
+                showPage('extraction');
+            }
+        }
+
+        function performExtraction() {
+            const text = document.getElementById('extraction-text').value;
+            const name = document.getElementById('graph-name').value;
+
+            if (!text.trim()) {
+                alert('请输入要抽取知识的文本！');
+                return;
+            }
+
+            const resultContainer = document.getElementById('extraction-results');
+            const resultContent = document.getElementById('result-content');
+
+            resultContainer.style.display = 'block';
+            resultContent.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+            setTimeout(() => {
+                resultContent.innerHTML = `
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-number">8</div>
+                            <div class="stat-text">抽取实体</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">12</div>
+                            <div class="stat-text">抽取关系</div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 20px; color: var(--text-muted);">抽取完成！图谱 "${name}" 已创建。</p>
+                    <div style="margin-top: 15px;">
+                        <button class="btn" onclick="showPage('knowledge')">🕸️ 查看图谱</button>
+                        <button class="btn btn-secondary" style="margin-left: 10px;" onclick="showPage('graphs')">📁 管理图谱</button>
+                    </div>
+                `;
+            }, 1500);
+        }
+
+        function loadDemoData() {
+            showPage('knowledge');
+            alert('示例图谱已加载！');
+        }
+
+        function loadDemoText() {
+            document.getElementById('extraction-text').value =
+                '人工智能（AI）是计算机科学的一个分支，致力于创建能够执行通常需要人类智能的任务的系统。' +
+                '机器学习是人工智能的一个子领域，使计算机能够从数据中学习和改进。' +
+                '深度学习是机器学习的一个分支，基于神经网络架构。' +
+                '自然语言处理（NLP）是AI的一个应用领域，使计算机能够理解人类语言。' +
+                'OpenAI是一家著名的AI研究公司，开发了GPT系列语言模型。';
+        }
+
+        window.addEventListener('resize', () => {
+            const knowledgePage = document.getElementById('knowledge');
+            if (knowledgePage.classList.contains('active')) {
+                renderKnowledgeGraph();
+            }
+        });
+
+        refreshGraphList();
+    </script>
+</body>
+</html>

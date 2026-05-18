@@ -1,0 +1,40 @@
+{
+  "graphs": [
+    {
+      "graph_id": "2f90638d-43d1-40c7-8de4-ea02e665783a",
+      "graph_name": "新图谱",
+      "description": "测试描述",
+      "entities": [],
+      "relations": [],
+      "metadata": {},
+      "created_at": "2026-05-17T13:57:16.218997",
+      "updated_at": "2026-05-17T13:57:16.218997",
+      "version": 1,
+      "tags": []
+    },
+    {
+      "graph_id": "a20d58e9-47ef-4134-992d-3a6baf75314d",
+      "graph_name": "新图谱",
+      "description": "测试描述",
+      "entities": [],
+      "relations": [],
+      "metadata": {},
+      "created_at": "2026-05-17T13:59:33.050502",
+      "updated_at": "2026-05-17T13:59:33.050503",
+      "version": 1,
+      "tags": []
+    },
+    {
+      "graph_id": "482bcc00-60cb-4f94-9723-e54c24782fc4",
+      "graph_name": "新图谱",
+      "description": "测试描述",
+      "entities": [],
+      "relations": [],
+      "metadata": {},
+      "created_at": "2026-05-18T00:12:35.230565",
+      "updated_at": "2026-05-18T00:12:35.230566",
+      "version": 1,
+      "tags": []
+    }
+  ]
+}

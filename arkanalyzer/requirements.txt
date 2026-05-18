@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Arkanalyzer 知识图谱分析系统 - 依赖配置文件
+"""
+
+flask>=2.3.0
+flask-cors>=4.0.0
+requests>=2.31.0
+sqlalchemy>=2.0.0
+pytest>=7.4.0
+pytest-cov>=4.1.0
+mermaid-js>=0.0.1
