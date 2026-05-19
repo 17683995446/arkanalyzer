@@ -31,12 +31,21 @@ class KnowledgeRepository:
         self.pool = get_database_pool()
 
     def save_graph(self, knowledge_graph: KnowledgeGraph) -> bool:
-        """保存知识图谱"""
+        """保存知识图谱（使用批量插入优化性能）"""
         with get_database_connection() as conn:
             cursor = conn.cursor()
             try:
                 # 暂时禁用外键检查以避免级联约束问题
                 cursor.execute("PRAGMA foreign_keys = OFF")
+                
+                # 优化：使用WAL模式提高写入性能
+                cursor.execute("PRAGMA journal_mode = WAL")
+                
+                # 禁用同步以提高性能（生产环境可考虑安全和性能平衡）
+                cursor.execute("PRAGMA synchronous = OFF")
+                
+                # 开始显式事务（比自动提交更快）
+                conn.execute("BEGIN TRANSACTION")
 
                 existing = cursor.execute(
                     "SELECT version FROM knowledge_graphs WHERE graph_id = ?",
@@ -70,13 +79,51 @@ class KnowledgeRepository:
                 # 删除旧的实体
                 cursor.execute("DELETE FROM entities WHERE graph_id = ?", (knowledge_graph.graph_id,))
 
-                # 保存所有实体
-                for entity in knowledge_graph.entities:
-                    self._save_entity(cursor, entity, knowledge_graph.graph_id)
+                # 批量保存所有实体
+                if knowledge_graph.entities:
+                    entity_data = [
+                        (
+                            entity.entity_id,
+                            knowledge_graph.graph_id,
+                            entity.entity_name,
+                            entity.entity_type,
+                            json.dumps(entity.properties, ensure_ascii=False),
+                            entity.description,
+                            entity.source,
+                            entity.confidence,
+                            entity.created_at.isoformat(),
+                            entity.updated_at.isoformat()
+                        )
+                        for entity in knowledge_graph.entities
+                    ]
+                    cursor.executemany("""
+                        INSERT OR REPLACE INTO entities
+                        (entity_id, graph_id, entity_name, entity_type, properties, description, source, confidence, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, entity_data)
 
-                # 保存所有关系
-                for relation in knowledge_graph.relations:
-                    self._save_relation(cursor, relation, knowledge_graph.graph_id)
+                # 批量保存所有关系
+                if knowledge_graph.relations:
+                    relation_data = [
+                        (
+                            relation.relation_id,
+                            knowledge_graph.graph_id,
+                            relation.source_entity_id,
+                            relation.target_entity_id,
+                            relation.relation_type,
+                            json.dumps(relation.properties, ensure_ascii=False),
+                            relation.weight,
+                            relation.confidence,
+                            relation.description,
+                            relation.created_at.isoformat()
+                        )
+                        for relation in knowledge_graph.relations
+                    ]
+                    cursor.executemany("""
+                        INSERT OR REPLACE INTO relations
+                        (relation_id, graph_id, source_entity_id, target_entity_id, relation_type, properties, weight, confidence, description, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, relation_data)
 
                 # 重新启用外键检查
                 cursor.execute("PRAGMA foreign_keys = ON")
@@ -86,44 +133,6 @@ class KnowledgeRepository:
                 conn.rollback()
                 print(f"保存图谱失败: {e}")
                 return False
-
-    def _save_entity(self, cursor, entity: Entity, graph_id: str):
-        """保存实体"""
-        cursor.execute("""
-            INSERT OR REPLACE INTO entities
-            (entity_id, graph_id, entity_name, entity_type, properties, description, source, confidence, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            entity.entity_id,
-            graph_id,
-            entity.entity_name,
-            entity.entity_type,
-            json.dumps(entity.properties, ensure_ascii=False),
-            entity.description,
-            entity.source,
-            entity.confidence,
-            entity.created_at.isoformat(),
-            entity.updated_at.isoformat()
-        ))
-
-    def _save_relation(self, cursor, relation: Relation, graph_id: str):
-        """保存关系"""
-        cursor.execute("""
-            INSERT OR REPLACE INTO relations
-            (relation_id, graph_id, source_entity_id, target_entity_id, relation_type, properties, weight, confidence, description, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            relation.relation_id,
-            graph_id,
-            relation.source_entity_id,
-            relation.target_entity_id,
-            relation.relation_type,
-            json.dumps(relation.properties, ensure_ascii=False),
-            relation.weight,
-            relation.confidence,
-            relation.description,
-            relation.created_at.isoformat()
-        ))
 
     def get_graph(self, graph_id: str) -> Optional[KnowledgeGraph]:
         """获取知识图谱"""

@@ -22,12 +22,13 @@ class DatabaseConnectionConfig:
     """数据库连接配置"""
     db_path: str = "data/arkanalyzer.db"
     pool_size: int = 10
-    timeout: int = 30
+    timeout: int = 60
     check_same_thread: bool = False
     journal_mode: str = "WAL"
     synchronous: str = "NORMAL"
     cache_size: int = -64000
     foreign_keys: bool = True
+    busy_timeout: int = 5000
 
 
 class DatabaseConnectionPool:
@@ -66,6 +67,7 @@ class DatabaseConnectionPool:
         cursor.execute(f"PRAGMA cache_size={self.config.cache_size}")
         cursor.execute(f"PRAGMA foreign_keys={'ON' if self.config.foreign_keys else 'OFF'}")
         cursor.execute("PRAGMA temp_store=MEMORY")
+        cursor.execute(f"PRAGMA busy_timeout={self.config.busy_timeout}")
         conn.commit()
 
     def get_connection(self) -> sqlite3.Connection:
@@ -85,9 +87,15 @@ class DatabaseConnectionPool:
         """归还连接"""
         try:
             conn.rollback()
-            self._pool.put_nowait(conn)
+            if not self._pool.full():
+                self._pool.put_nowait(conn)
+            else:
+                conn.close()
         except:
-            conn.close()
+            try:
+                conn.close()
+            except:
+                pass
 
     def close_all(self):
         """关闭所有连接"""

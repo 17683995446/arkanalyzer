@@ -111,6 +111,11 @@ class KnowledgeGraph:
     updated_at: datetime = field(default_factory=datetime.now)
     version: int = 1
     tags: List[str] = field(default_factory=list)
+    
+    # 缓存和索引（运行时优化，不持久化）
+    _entity_index: Dict[str, Entity] = field(default_factory=dict, init=False, repr=False)
+    _neighbor_cache: Dict[str, List[Entity]] = field(default_factory=dict, init=False, repr=False)
+    _relation_index: Dict[str, List[Relation]] = field(default_factory=dict, init=False, repr=False)
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -138,24 +143,61 @@ class KnowledgeGraph:
             data['entities'] = [Entity.from_dict(e) for e in data['entities']]
         if 'relations' in data:
             data['relations'] = [Relation.from_dict(r) for r in data['relations']]
-        return cls(**data)
+        graph = cls(**data)
+        graph._rebuild_indices()  # 重建索引
+        return graph
 
+    def _rebuild_indices(self):
+        """重建所有索引（用于初始化和大量修改后）"""
+        self._entity_index.clear()
+        self._neighbor_cache.clear()
+        self._relation_index.clear()
+        
+        for entity in self.entities:
+            self._entity_index[entity.entity_id] = entity
+            
+        for relation in self.relations:
+            src = relation.source_entity_id
+            tgt = relation.target_entity_id
+            
+            if src not in self._relation_index:
+                self._relation_index[src] = []
+            self._relation_index[src].append(relation)
+            
+            if tgt not in self._relation_index:
+                self._relation_index[tgt] = []
+            self._relation_index[tgt].append(relation)
+    
     def add_entity(self, entity: Entity):
         """添加实体"""
         self.entities.append(entity)
+        self._entity_index[entity.entity_id] = entity
+        self._neighbor_cache.clear()  # 缓存失效
         self.updated_at = datetime.now()
 
     def add_relation(self, relation: Relation):
         """添加关系"""
         self.relations.append(relation)
+        
+        src = relation.source_entity_id
+        tgt = relation.target_entity_id
+        
+        if src not in self._relation_index:
+            self._relation_index[src] = []
+        self._relation_index[src].append(relation)
+        
+        if tgt not in self._relation_index:
+            self._relation_index[tgt] = []
+        self._relation_index[tgt].append(relation)
+        
+        self._neighbor_cache.clear()
         self.updated_at = datetime.now()
 
     def get_entity_by_id(self, entity_id: str) -> Optional[Entity]:
-        """根据ID获取实体"""
-        for entity in self.entities:
-            if entity.entity_id == entity_id:
-                return entity
-        return None
+        """根据ID获取实体（O(1)查找）"""
+        if not self._entity_index:
+            self._rebuild_indices()
+        return self._entity_index.get(entity_id)
 
     def get_entity_by_name(self, name: str) -> Optional[Entity]:
         """根据名称获取实体"""
@@ -165,21 +207,29 @@ class KnowledgeGraph:
         return None
 
     def get_neighbors(self, entity_id: str) -> List[Entity]:
-        """获取相邻实体"""
+        """获取相邻实体（使用缓存优化）"""
+        if entity_id in self._neighbor_cache:
+            return self._neighbor_cache[entity_id]
+            
+        if not self._relation_index:
+            self._rebuild_indices()
+            
         neighbors = []
         neighbor_ids = set()
-
-        for relation in self.relations:
-            if relation.source_entity_id == entity_id:
-                neighbor_ids.add(relation.target_entity_id)
-            elif relation.target_entity_id == entity_id:
-                neighbor_ids.add(relation.source_entity_id)
-
-        for entity_id in neighbor_ids:
-            entity = self.get_entity_by_id(entity_id)
+        
+        if entity_id in self._relation_index:
+            for relation in self._relation_index[entity_id]:
+                if relation.source_entity_id == entity_id:
+                    neighbor_ids.add(relation.target_entity_id)
+                else:
+                    neighbor_ids.add(relation.source_entity_id)
+        
+        for n_id in neighbor_ids:
+            entity = self.get_entity_by_id(n_id)
             if entity:
                 neighbors.append(entity)
-
+        
+        self._neighbor_cache[entity_id] = neighbors
         return neighbors
 
     def get_statistics(self) -> Dict[str, Any]:

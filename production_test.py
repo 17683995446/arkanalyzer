@@ -370,7 +370,7 @@ def test_analyzer_operations():
         
         reporter.log_test("Graph Analyzer", True, time.time()-start, {
             "connected_components": stats.connected_components,
-            "communities_found": len(communities),
+            "communities_found": len(communities.communities),
             "key_entities_found": len(key_entities)
         })
         return True
