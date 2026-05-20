@@ -10,8 +10,10 @@ import uuid
 import time
 import random
 from datetime import datetime
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Iterator, Generator
 from dataclasses import dataclass, field, asdict
+from functools import lru_cache
+from collections import OrderedDict
 
 import sys
 import os
@@ -24,6 +26,46 @@ from database.database_connection_manager import (
     get_database_connection,
     get_db_cursor
 )
+
+
+class LRUCache:
+    """LRU缓存实现"""
+    
+    def __init__(self, capacity: int = 10):
+        self.cache = OrderedDict()
+        self.capacity = capacity
+        self._lock = None  # 简化版，不使用锁
+    
+    def get(self, key: str) -> Optional[Any]:
+        """获取缓存项"""
+        if key not in self.cache:
+            return None
+        # 移动到末尾（最近使用）
+        self.cache.move_to_end(key)
+        return self.cache[key]
+    
+    def put(self, key: str, value: Any):
+        """放入缓存项"""
+        if key in self.cache:
+            self.cache.move_to_end(key)
+        else:
+            if len(self.cache) >= self.capacity:
+                # 删除最旧的项
+                self.cache.popitem(last=False)
+        self.cache[key] = value
+    
+    def invalidate(self, key: str):
+        """删除缓存项"""
+        if key in self.cache:
+            del self.cache[key]
+    
+    def clear(self):
+        """清空缓存"""
+        self.cache.clear()
+    
+    def size(self) -> int:
+        """获取缓存大小"""
+        return len(self.cache)
 
 
 def with_retry(max_retries: int = 5, base_delay: float = 0.1):
@@ -58,10 +100,12 @@ def with_retry(max_retries: int = 5, base_delay: float = 0.1):
 
 
 class KnowledgeRepository:
-    """知识存储仓库"""
+    """知识存储仓库 - 优化版"""
 
-    def __init__(self):
+    def __init__(self, cache_size: int = 20):
         self.pool = get_database_pool()
+        self._graph_cache = LRUCache(capacity=cache_size)
+        self._stats_cache = LRUCache(capacity=100)
 
     def _save_graph_internal(self, knowledge_graph: KnowledgeGraph) -> bool:
         """内部保存方法 - 实际的数据库操作"""
@@ -168,15 +212,24 @@ class KnowledgeRepository:
 
     @with_retry(max_retries=5, base_delay=0.1)
     def save_graph(self, knowledge_graph: KnowledgeGraph) -> bool:
-        """保存知识图谱（使用批量插入优化性能 + 重试机制）"""
+        """保存知识图谱（使用批量插入优化性能 + 重试机制 + 缓存更新）"""
         try:
-            return self._save_graph_internal(knowledge_graph)
+            result = self._save_graph_internal(knowledge_graph)
+            if result:
+                self._graph_cache.put(knowledge_graph.graph_id, knowledge_graph)
+                self._stats_cache.invalidate(knowledge_graph.graph_id)
+            return result
         except Exception as e:
             print(f"保存图谱失败: {e}")
             return False
 
-    def get_graph(self, graph_id: str) -> Optional[KnowledgeGraph]:
-        """获取知识图谱"""
+    def get_graph(self, graph_id: str, use_cache: bool = True) -> Optional[KnowledgeGraph]:
+        """获取知识图谱（带缓存优化）"""
+        if use_cache:
+            cached = self._graph_cache.get(graph_id)
+            if cached is not None:
+                return cached
+        
         with get_database_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM knowledge_graphs WHERE graph_id = ?", (graph_id,))
@@ -188,7 +241,7 @@ class KnowledgeRepository:
             entities = self._get_entities_by_graph(cursor, graph_id)
             relations = self._get_relations_by_graph(cursor, graph_id)
 
-            return KnowledgeGraph(
+            graph = KnowledgeGraph(
                 graph_id=row['graph_id'],
                 graph_name=row['graph_name'],
                 description=row['description'] or "",
@@ -200,6 +253,11 @@ class KnowledgeRepository:
                 created_at=datetime.fromisoformat(row['created_at']),
                 updated_at=datetime.fromisoformat(row['updated_at'])
             )
+            
+            if use_cache:
+                self._graph_cache.put(graph_id, graph)
+            
+            return graph
 
     def _get_entities_by_graph(self, cursor, graph_id: str) -> List[Entity]:
         """获取图谱的所有实体"""
@@ -253,12 +311,14 @@ class KnowledgeRepository:
             return graphs
 
     def delete_graph(self, graph_id: str) -> bool:
-        """删除知识图谱"""
+        """删除知识图谱（清除缓存）"""
         with get_database_connection() as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute("DELETE FROM knowledge_graphs WHERE graph_id = ?", (graph_id,))
                 conn.commit()
+                self._graph_cache.invalidate(graph_id)
+                self._stats_cache.invalidate(graph_id)
                 return True
             except Exception as e:
                 conn.rollback()
@@ -266,7 +326,7 @@ class KnowledgeRepository:
                 return False
 
     def update_graph_metadata(self, graph_id: str, metadata: Dict[str, Any]) -> bool:
-        """更新图谱元数据"""
+        """更新图谱元数据（清除缓存）"""
         with get_database_connection() as conn:
             cursor = conn.cursor()
             try:
@@ -276,6 +336,8 @@ class KnowledgeRepository:
                     WHERE graph_id = ?
                 """, (json.dumps(metadata, ensure_ascii=False), datetime.now().isoformat(), graph_id))
                 conn.commit()
+                self._graph_cache.invalidate(graph_id)
+                self._stats_cache.invalidate(graph_id)
                 return True
             except Exception as e:
                 conn.rollback()
@@ -387,8 +449,13 @@ class KnowledgeRepository:
                 ))
             return relations
 
-    def get_graph_statistics(self, graph_id: str) -> Dict[str, Any]:
-        """获取图谱统计信息"""
+    def get_graph_statistics(self, graph_id: str, use_cache: bool = True) -> Dict[str, Any]:
+        """获取图谱统计信息（带缓存优化）"""
+        if use_cache:
+            cached = self._stats_cache.get(graph_id)
+            if cached is not None:
+                return cached
+        
         with get_database_connection() as conn:
             cursor = conn.cursor()
 
@@ -414,7 +481,7 @@ class KnowledgeRepository:
 
             density = relation_count / max(1, entity_count * (entity_count - 1) / 2)
 
-            return {
+            stats = {
                 'graph_id': graph_id,
                 'entity_count': entity_count,
                 'relation_count': relation_count,
@@ -422,6 +489,83 @@ class KnowledgeRepository:
                 'relation_types': relation_types,
                 'density': density
             }
+            
+            if use_cache:
+                self._stats_cache.put(graph_id, stats)
+            
+            return stats
+
+    def get_entities_paginated(self, graph_id: str, offset: int = 0, 
+                              limit: int = 100) -> List[Entity]:
+        """分页获取实体（优化大数据集）"""
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM entities WHERE graph_id = ? LIMIT ? OFFSET ?",
+                (graph_id, limit, offset)
+            )
+            
+            entities = []
+            for row in cursor.fetchall():
+                entities.append(Entity(
+                    entity_id=row['entity_id'],
+                    entity_name=row['entity_name'],
+                    entity_type=row['entity_type'],
+                    properties=json.loads(row['properties'] or '{}'),
+                    description=row['description'] or "",
+                    source=row['source'] or "",
+                    confidence=row['confidence'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at'])
+                ))
+            return entities
+
+    def get_relations_paginated(self, graph_id: str, offset: int = 0, 
+                                limit: int = 100) -> List[Relation]:
+        """分页获取关系（优化大数据集）"""
+        with get_database_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM relations WHERE graph_id = ? LIMIT ? OFFSET ?",
+                (graph_id, limit, offset)
+            )
+            
+            relations = []
+            for row in cursor.fetchall():
+                relations.append(Relation(
+                    relation_id=row['relation_id'],
+                    source_entity_id=row['source_entity_id'],
+                    target_entity_id=row['target_entity_id'],
+                    relation_type=row['relation_type'],
+                    properties=json.loads(row['properties'] or '{}'),
+                    weight=row['weight'],
+                    confidence=row['confidence'],
+                    description=row['description'] or "",
+                    created_at=datetime.fromisoformat(row['created_at'])
+                ))
+            return relations
+
+    def iter_entities(self, graph_id: str, batch_size: int = 500) -> Generator[Entity, None, None]:
+        """迭代器方式获取实体（流式加载，优化内存）"""
+        offset = 0
+        while True:
+            entities = self.get_entities_paginated(graph_id, offset, batch_size)
+            if not entities:
+                break
+            for entity in entities:
+                yield entity
+            offset += batch_size
+
+    def iter_relations(self, graph_id: str, batch_size: int = 500) -> Generator[Relation, None, None]:
+        """迭代器方式获取关系（流式加载，优化内存）"""
+        offset = 0
+        while True:
+            relations = self.get_relations_paginated(graph_id, offset, batch_size)
+            if not relations:
+                break
+            for relation in relations:
+                yield relation
+            offset += batch_size
 
     def save_extraction_history(self, extraction_data: Dict[str, Any]) -> bool:
         """保存抽取历史"""

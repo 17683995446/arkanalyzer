@@ -12,7 +12,7 @@ import json
 from datetime import datetime
 from typing import Dict, List, Any
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from core.knowledge_graph_core import (
     Entity, Relation, KnowledgeGraph, KnowledgeGraphManager,
