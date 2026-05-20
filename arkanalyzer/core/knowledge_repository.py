@@ -7,6 +7,8 @@ Arkanalyzer 知识存储仓库模块
 
 import json
 import uuid
+import time
+import random
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 from dataclasses import dataclass, field, asdict
@@ -24,14 +26,45 @@ from database.database_connection_manager import (
 )
 
 
+def with_retry(max_retries: int = 5, base_delay: float = 0.1):
+    """重试装饰器 - 处理数据库锁定问题"""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            retries = 0
+            last_exception = None
+            
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_exception = e
+                    error_str = str(e).lower()
+                    
+                    if "database is locked" in error_str or "locked" in error_str or "busy" in error_str:
+                        retries += 1
+                        if retries >= max_retries:
+                            break
+                        
+                        # 指数退避 + 抖动
+                        delay = base_delay * (2 ** (retries - 1)) + random.uniform(0, 0.1)
+                        time.sleep(delay)
+                    else:
+                        # 不是锁定问题，直接抛出
+                        raise
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+
 class KnowledgeRepository:
     """知识存储仓库"""
 
     def __init__(self):
         self.pool = get_database_pool()
 
-    def save_graph(self, knowledge_graph: KnowledgeGraph) -> bool:
-        """保存知识图谱（使用批量插入优化性能）"""
+    def _save_graph_internal(self, knowledge_graph: KnowledgeGraph) -> bool:
+        """内部保存方法 - 实际的数据库操作"""
         with get_database_connection() as conn:
             cursor = conn.cursor()
             try:
@@ -131,8 +164,16 @@ class KnowledgeRepository:
                 return True
             except Exception as e:
                 conn.rollback()
-                print(f"保存图谱失败: {e}")
-                return False
+                raise e
+
+    @with_retry(max_retries=5, base_delay=0.1)
+    def save_graph(self, knowledge_graph: KnowledgeGraph) -> bool:
+        """保存知识图谱（使用批量插入优化性能 + 重试机制）"""
+        try:
+            return self._save_graph_internal(knowledge_graph)
+        except Exception as e:
+            print(f"保存图谱失败: {e}")
+            return False
 
     def get_graph(self, graph_id: str) -> Optional[KnowledgeGraph]:
         """获取知识图谱"""

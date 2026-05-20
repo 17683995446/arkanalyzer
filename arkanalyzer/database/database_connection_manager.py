@@ -71,8 +71,9 @@ class DatabaseConnectionPool:
         conn.commit()
 
     def get_connection(self) -> sqlite3.Connection:
-        """获取连接"""
+        """获取连接 - 优化版，支持等待"""
         try:
+            # 首先尝试立即获取
             conn = self._pool.get_nowait()
             return conn
         except Empty:
@@ -80,16 +81,31 @@ class DatabaseConnectionPool:
                 if self._init_connection_count < self._max_connections:
                     self._init_connection_count += 1
                     return self._create_connection()
-                else:
-                    return self._create_connection()
+            
+            # 如果超过最大连接数，等待
+            try:
+                conn = self._pool.get(timeout=self.config.timeout)
+                return conn
+            except Empty:
+                # 等待超时，创建临时连接
+                return self._create_connection()
 
     def return_connection(self, conn: sqlite3.Connection):
-        """归还连接"""
+        """归还连接 - 优化版"""
         try:
-            conn.rollback()
-            if not self._pool.full():
-                self._pool.put_nowait(conn)
-            else:
+            # 首先尝试回滚任何未提交的事务
+            try:
+                conn.rollback()
+            except:
+                pass
+                
+            # 尝试放回池中
+            try:
+                if not self._pool.full():
+                    self._pool.put_nowait(conn)
+                else:
+                    conn.close()
+            except:
                 conn.close()
         except:
             try:
