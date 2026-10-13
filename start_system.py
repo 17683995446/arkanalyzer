@@ -47,7 +47,7 @@ class ArkanalyzerSystem:
         self.manager = KnowledgeGraphManager()
 
         try:
-            self.llm_connector = LLMConnector(api_key="sk-uqelhavcdhfxjzjesdenxpbtqombamjniazzjtbssmdcwdvg")
+            self.llm_connector = LLMConnector(api_key="REDACTED_API_KEY")
             llm_status = "✓"
         except Exception as e:
             llm_status = f"✗ ({str(e)})"

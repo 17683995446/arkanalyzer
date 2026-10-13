@@ -15,7 +15,7 @@ from pathlib import Path
 @dataclass
 class LLMConfig:
     """大语言模型配置"""
-    api_key: str = "sk-uqelhavcdhfxjzjesdenxpbtqombamjniazzjtbssmdcwdvg"
+    api_key: str = "REDACTED_API_KEY"
     base_url: str = "https://api.siliconflow.cn/v1"
     model: str = "Qwen/Qwen2.5-7B-Instruct"
     temperature: float = 0.7
